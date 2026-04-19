@@ -49,6 +49,11 @@ AVIF_CONVERT_API int convert_to_avif(
                 return 1;
             }
             break;
+        case FORMAT_GIF:
+            if (load_gif(input_data, input_size, &img) != 0) {
+                return 1;
+            }
+            break;
         default:
             fprintf(stderr, "Unsupported or unrecognized input format\n");
             return 1;

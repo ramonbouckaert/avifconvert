@@ -14,7 +14,8 @@ typedef enum {
     FORMAT_PNG,
     FORMAT_JPEG,
     FORMAT_WEBP,
-    FORMAT_HEIF
+    FORMAT_HEIF,
+    FORMAT_GIF
 } InputFormat;
 
 InputFormat detect_input_format(const uint8_t *buf, size_t len);

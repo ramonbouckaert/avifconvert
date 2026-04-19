@@ -89,6 +89,46 @@ static void test_load_webp_dimensions_match_jpg(void) {
 
 // --- load_heif ---
 
+// --- load_gif ---
+
+static void test_load_gif_succeeds(void) {
+    uint8_t *data = NULL; size_t size = 0;
+    ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.gif", &data, &size), 0);
+    LoadedImage img = {0};
+    ASSERT_EQ(load_gif(data, size, &img), 0);
+    ASSERT_NOT_NULL(img.pixels);
+    ASSERT_TRUE(img.width > 0);
+    ASSERT_TRUE(img.height > 0);
+    ASSERT_FALSE(img.lossless); // GIF is palette-limited
+    free_loaded_image(&img);
+    free(data);
+}
+
+static void test_load_gif_extracts_xmp(void) {
+    uint8_t *data = NULL; size_t size = 0;
+    ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.gif", &data, &size), 0);
+    LoadedImage img = {0};
+    ASSERT_EQ(load_gif(data, size, &img), 0);
+    ASSERT_NOT_NULL(img.xmp_data);
+    ASSERT_TRUE(img.xmp_size > 0);
+    free_loaded_image(&img);
+    free(data);
+}
+
+static void test_load_gif_dimensions_match_jpg(void) {
+    uint8_t *jpg_data = NULL; size_t jpg_size = 0;
+    uint8_t *gif_data = NULL; size_t gif_size = 0;
+    ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.jpg", &jpg_data, &jpg_size), 0);
+    ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.gif", &gif_data, &gif_size), 0);
+    LoadedImage jpg = {0}, gif = {0};
+    ASSERT_EQ(load_jpg(jpg_data, jpg_size, &jpg), 0);
+    ASSERT_EQ(load_gif(gif_data, gif_size, &gif), 0);
+    ASSERT_EQ(jpg.width, gif.width);
+    ASSERT_EQ(jpg.height, gif.height);
+    free_loaded_image(&jpg); free(jpg_data);
+    free_loaded_image(&gif); free(gif_data);
+}
+
 static void test_load_heif_succeeds(void) {
     uint8_t *data = NULL; size_t size = 0;
     ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.heif", &data, &size), 0);
@@ -242,6 +282,10 @@ static void run_all(void) {
 
     test_load_webp_succeeds();
     test_load_webp_dimensions_match_jpg();
+
+    test_load_gif_succeeds();
+    test_load_gif_extracts_xmp();
+    test_load_gif_dimensions_match_jpg();
 
     test_load_heif_succeeds();
 

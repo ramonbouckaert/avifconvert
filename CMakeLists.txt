@@ -13,6 +13,7 @@ find_package(libheif CONFIG REQUIRED)
 find_package(SPNG CONFIG REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(WebP CONFIG REQUIRED)
+find_package(GIF REQUIRED)
 find_package(libuv CONFIG REQUIRED)
 
 if(JNI_FOUND)
@@ -26,6 +27,7 @@ add_library(avifconvertcore SHARED
         src/avif_convert_core/common.c
         src/avif_convert_core/input/loaders.h
         src/avif_convert_core/input/png_loader.c
+        src/avif_convert_core/input/gif_loader.c
         src/avif_convert_core/input/heif_loader.c
         src/avif_convert_core/output/avif_writer.c
         src/avif_convert_core/input/jpg_loader.c
@@ -42,6 +44,7 @@ target_link_libraries(avifconvertcore PRIVATE
         heif
         JPEG::JPEG
         WebP::webp WebP::webpdecoder WebP::webpdemux
+        GIF::GIF
         $<IF:$<TARGET_EXISTS:spng::spng>,spng::spng,spng::spng_static>
 )
 

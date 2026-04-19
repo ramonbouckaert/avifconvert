@@ -126,6 +126,15 @@ static void test_convert_avif_passthrough(void) {
     free(in); free(out);
 }
 
+static void test_convert_gif(void) {
+    uint8_t *in = NULL; size_t in_size = 0;
+    ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.gif", &in, &in_size), 0);
+    uint8_t *out = NULL; size_t out_size = 0;
+    ASSERT_EQ(convert_to_avif(in, in_size, &out, &out_size, 10, 80), 0);
+    assert_is_valid_avif(out, out_size);
+    free(in); free(out);
+}
+
 static void test_convert_unknown_format_fails(void) {
     const uint8_t garbage[] = {0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C};
     uint8_t *out = NULL; size_t out_size = 0;
@@ -211,6 +220,14 @@ static void test_heif_preserves_exif(void) {
     avifDecoderDestroy(dec); free(out);
 }
 
+static void test_gif_preserves_xmp(void) {
+    uint8_t *out = NULL; size_t out_size = 0;
+    avifDecoder *dec = convert_and_decode(TEST_IMAGES_DIR "/burger.gif", &out, &out_size);
+    if (!dec) return;
+    assert_is_valid_xmp(dec->image->xmp.data, dec->image->xmp.size);
+    avifDecoderDestroy(dec); free(out);
+}
+
 static void test_heif_preserves_xmp(void) {
     uint8_t *out = NULL; size_t out_size = 0;
     avifDecoder *dec = convert_and_decode(TEST_IMAGES_DIR "/burger.heif", &out, &out_size);
@@ -280,6 +297,7 @@ static void run_all(void) {
     test_convert_png();
     test_convert_webp();
     test_convert_heif();
+    test_convert_gif();
     test_convert_avif_passthrough();
     test_convert_unknown_format_fails();
     test_convert_quality_affects_output_size();
@@ -292,6 +310,7 @@ static void run_all(void) {
     test_webp_preserves_xmp();
     test_heif_preserves_exif();
     test_heif_preserves_xmp();
+    test_gif_preserves_xmp();
     test_exif_preserved_across_formats();
     test_xmp_preserved_across_formats();
 }

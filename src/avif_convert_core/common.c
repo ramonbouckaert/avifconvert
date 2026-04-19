@@ -18,6 +18,11 @@ InputFormat detect_input_format(const uint8_t *buf, size_t len) {
     if (len >= 12 && memcmp(buf, "RIFF", 4) == 0 && memcmp(buf + 8, "WEBP", 4) == 0)
         return FORMAT_WEBP;
 
+    if (len >= 6 &&
+        memcmp(buf, "GIF", 3) == 0 &&
+        (memcmp(buf + 3, "87a", 3) == 0 || memcmp(buf + 3, "89a", 3) == 0))
+        return FORMAT_GIF;
+
     if (len >= 12 && memcmp(buf + 4, "ftyp", 4) == 0) {
         const char *brand = (const char *) (buf + 8);
         if (memcmp(brand, "heic", 4) == 0 || memcmp(brand, "heix", 4) == 0 ||
