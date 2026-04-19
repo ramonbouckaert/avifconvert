@@ -32,7 +32,7 @@ int load_jpg(const uint8_t *data, const size_t size, LoadedImage *out_image) {
         fprintf(stderr, "Unsupported number of channels: %d\n", channels);
         jpeg_finish_decompress(&cinfo);
         jpeg_destroy_decompress(&cinfo);
-        return -1;
+        return 1;
     }
 
     unsigned int row_stride = width * 4;
@@ -40,7 +40,7 @@ int load_jpg(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     if (!buffer) {
         jpeg_finish_decompress(&cinfo);
         jpeg_destroy_decompress(&cinfo);
-        return -1;
+        return 1;
     }
 
     JSAMPARRAY row = (*cinfo.mem->alloc_sarray)((j_common_ptr) &cinfo, JPOOL_IMAGE, width * channels, 1);
@@ -70,18 +70,40 @@ int load_jpg(const uint8_t *data, const size_t size, LoadedImage *out_image) {
             if (
                 marker->data_length > 6 && memcmp(marker->data, "Exif\0\0", 6) == 0
             ) {
-                unsigned char *exif = malloc(marker->data_length);
-                memcpy(exif, marker->data, marker->data_length);
-                out_image->exif_data = exif;
-                out_image->exif_size = marker->data_length;
+                // Scan for the TIFF header magic — use everything from that point regardless
+                // of whatever prefix bytes precede it (typically "Exif\0\0").
+                static const uint8_t tiff_le[] = {0x49, 0x49, 0x2A, 0x00};
+                static const uint8_t tiff_be[] = {0x4D, 0x4D, 0x00, 0x2A};
+                size_t offset = marker->data_length; // sentinel: not found
+                for (size_t j = 0; j + 4 <= marker->data_length; j++) {
+                    if (memcmp(marker->data + j, tiff_le, 4) == 0 ||
+                        memcmp(marker->data + j, tiff_be, 4) == 0) {
+                        offset = j;
+                        break;
+                    }
+                }
+                if (offset < marker->data_length) {
+                    const size_t exif_size = marker->data_length - offset;
+                    unsigned char *exif = malloc(exif_size);
+                    if (exif) {
+                        memcpy(exif, marker->data + offset, exif_size);
+                        out_image->exif_data = exif;
+                        out_image->exif_size = exif_size;
+                    }
+                }
             } else if (
                 marker->data_length > strlen(XMP_IDENTIFIER) &&
                 memcmp(marker->data, XMP_IDENTIFIER, strlen(XMP_IDENTIFIER)) == 0
             ) {
-                unsigned char *xmp = malloc(marker->data_length);
-                memcpy(xmp, marker->data, marker->data_length);
-                out_image->xmp_data = xmp;
-                out_image->xmp_size = marker->data_length;
+                // Skip the APP1 identifier string and its null terminator — store raw XMP
+                const size_t offset = strlen(XMP_IDENTIFIER) + 1;
+                const size_t xmp_size = marker->data_length - offset;
+                unsigned char *xmp = malloc(xmp_size);
+                if (xmp) {
+                    memcpy(xmp, marker->data + offset, xmp_size);
+                    out_image->xmp_data = xmp;
+                    out_image->xmp_size = xmp_size;
+                }
             }
         }
         marker = marker->next;

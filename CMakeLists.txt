@@ -6,8 +6,8 @@ set(AVIFCONVERT_VERSION "${PROJECT_VERSION}${VERSION_SUFFIX}")
 set(CMAKE_C_STANDARD 99)
 set(VCPKG_LIBRARY_LINKAGE static)
 
-find_package(Java REQUIRED)
-find_package(JNI REQUIRED)
+find_package(Java)
+find_package(JNI)
 find_package(libavif CONFIG REQUIRED)
 find_package(libheif CONFIG REQUIRED)
 find_package(SPNG CONFIG REQUIRED)
@@ -15,7 +15,9 @@ find_package(JPEG REQUIRED)
 find_package(WebP CONFIG REQUIRED)
 find_package(libuv CONFIG REQUIRED)
 
-include_directories(${JNI_INCLUDE_DIRS})
+if(JNI_FOUND)
+    include_directories(${JNI_INCLUDE_DIRS})
+endif()
 
 # avifconvertcore
 
@@ -28,7 +30,6 @@ add_library(avifconvertcore SHARED
         src/avif_convert_core/output/avif_writer.c
         src/avif_convert_core/input/jpg_loader.c
         src/avif_convert_core/input/webp_loader.c
-        src/avif_convert_core/input/loaders.h
         src/avif_convert_core/avif_convert.c
         src/avif_convert_core/avif_convert.h
 )
@@ -44,14 +45,15 @@ target_link_libraries(avifconvertcore PRIVATE
         $<IF:$<TARGET_EXISTS:spng::spng>,spng::spng,spng::spng_static>
 )
 
-# avifconvert-jni
+# avifconvert-jni (optional — requires Java)
 
-add_library(avifconvert-jni SHARED
-        src/avif_convert_jni/avif_convert_jni.h
-        src/avif_convert_jni/avif_convert_jni.c
-)
-
-target_link_libraries(avifconvert-jni PUBLIC avifconvertcore)
+if(Java_FOUND AND JNI_FOUND)
+    add_library(avifconvert-jni SHARED
+            src/avif_convert_jni/avif_convert_jni.h
+            src/avif_convert_jni/avif_convert_jni.c
+    )
+    target_link_libraries(avifconvert-jni PUBLIC avifconvertcore)
+endif()
 
 # avifconvert-io
 
@@ -89,3 +91,16 @@ target_link_libraries(avifconvertwatch PUBLIC avifconvertcore avifconvertio
 if(UNIX AND NOT APPLE)
     target_link_libraries(avifconvertcore PRIVATE stdc++)
 endif()
+
+# Tests
+
+enable_testing()
+
+foreach(suite common file_io loaders convert)
+    add_executable(test-${suite} tests/test_${suite}.c)
+    target_compile_definitions(test-${suite} PRIVATE
+            TEST_IMAGES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/images"
+    )
+    target_link_libraries(test-${suite} PRIVATE avifconvertcore avifconvertio avif)
+    add_test(NAME ${suite} COMMAND test-${suite})
+endforeach()

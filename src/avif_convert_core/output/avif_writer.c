@@ -23,10 +23,15 @@ int write_avif(const LoadedImage *img, avifRWData *out_data, const int speed, co
     // YUV image construction
     avifImage *avif = avifImageCreate(img->width, img->height, 8,
                                       img->lossless ? AVIF_PIXEL_FORMAT_YUV444 : AVIF_PIXEL_FORMAT_YUV420);
-    avifImageRGBToYUV(avif, &rgb);
+    const avifResult yuv_result = avifImageRGBToYUV(avif, &rgb);
+    if (yuv_result != AVIF_RESULT_OK) {
+        fprintf(stderr, "Failed to convert RGB to YUV: %s\n", avifResultToString(yuv_result));
+        avifImageDestroy(avif);
+        return 1;
+    }
 
-    if (img->xmp_data != NULL) avifImageSetMetadataXMP(avif, img->xmp_data, img->xmp_size);
-    if (img->exif_data != NULL) avifImageSetMetadataExif(avif, img->exif_data, img->exif_size);
+    if (img->xmp_data != NULL) (void)avifImageSetMetadataXMP(avif, img->xmp_data, img->xmp_size);
+    if (img->exif_data != NULL) (void)avifImageSetMetadataExif(avif, img->exif_data, img->exif_size);
 
     // Encoder setup
     avifEncoder *encoder = avifEncoderCreate();

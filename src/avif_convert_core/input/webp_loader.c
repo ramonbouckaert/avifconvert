@@ -33,7 +33,7 @@ int detect_webp_lossless(const uint8_t *data, const size_t size) {
 
         // Unknown chunk — skip
         uint32_t chunk_size = ptr[4] | ptr[5] << 8 | ptr[6] << 16 | ptr[7] << 24;
-        ptr += 8 + (chunk_size + 1 & ~1);
+        ptr += 8 + ((chunk_size + 1) & ~1);
     }
 
     return -1; // Could not determine
@@ -72,12 +72,24 @@ int load_webp(const uint8_t *data, const size_t size, LoadedImage *out_image) {
         fprintf(stderr, "WebP demux failed\n");
         return -1;
     }
+    static const uint8_t tiff_le[] = {0x49, 0x49, 0x2A, 0x00};
+    static const uint8_t tiff_be[] = {0x4D, 0x4D, 0x00, 0x2A};
     WebPChunkIterator chunk_iter;
     if (WebPDemuxGetChunk(demux, "EXIF", 1, &chunk_iter)) {
-        unsigned char *exif = malloc(chunk_iter.chunk.size);
-        memcpy(exif, chunk_iter.chunk.bytes, chunk_iter.chunk.size);
-        out_image->exif_data = exif;
-        out_image->exif_size = chunk_iter.chunk.size;
+        const uint8_t *src = chunk_iter.chunk.bytes;
+        const size_t src_size = chunk_iter.chunk.size;
+        for (size_t j = 0; j + 4 <= src_size; j++) {
+            if (memcmp(src + j, tiff_le, 4) == 0 || memcmp(src + j, tiff_be, 4) == 0) {
+                const size_t exif_size = src_size - j;
+                unsigned char *exif = malloc(exif_size);
+                if (exif) {
+                    memcpy(exif, src + j, exif_size);
+                    out_image->exif_data = exif;
+                    out_image->exif_size = exif_size;
+                }
+                break;
+            }
+        }
         WebPDemuxReleaseChunkIterator(&chunk_iter);
     }
     if (WebPDemuxGetChunk(demux, "XMP ", 1, &chunk_iter)) {

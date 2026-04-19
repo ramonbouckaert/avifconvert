@@ -25,6 +25,7 @@ AVIF_CONVERT_API int convert_to_avif(
         case FORMAT_AVIF:
             // Simply copy the input into the output, we don't need to rewrite an existing AVIF file
             *output_data = malloc(input_size);
+            if (!*output_data) return 1;
             *output_size = input_size;
             memcpy(*output_data, input_data, input_size);
             return 0;

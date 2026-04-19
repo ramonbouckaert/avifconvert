@@ -2,11 +2,16 @@
 // Created by Ramon on 3/06/2025.
 //
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <uv.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #include "file_watcher.h"
 
@@ -22,7 +27,7 @@ uv_fs_event_t *watchers[MAX_WATCHERS];
 int watcher_count = 0;
 
 typedef struct PendingEvent {
-    char path[1024];
+    char path[PATH_MAX];
     struct PendingEvent *next;
 } PendingEvent;
 
@@ -149,7 +154,11 @@ void flush_pending_events(const uv_timer_t *handle) {
             task->path = _strdup(e->path);
             req->data = task;
 
-            uv_queue_work(uv_default_loop(), req, &do_file_task, &after_file_task);
+            if (uv_queue_work(loop, req, &do_file_task, &after_file_task) != 0) {
+                free(task->path);
+                free(task);
+                free(req);
+            }
         }
         PendingEvent *next = e->next;
         free(e);
@@ -172,7 +181,7 @@ void on_fs_event(const uv_fs_event_t *handle, const char *filename, const int ev
 
     if (!filename || is_hidden(filename)) return;
 
-    char full_path[1024];
+    char full_path[PATH_MAX];
     snprintf(full_path, sizeof(full_path), "%s/%s", (char *) handle->data, filename);
 
     if (!is_directory(full_path)) {
@@ -206,7 +215,7 @@ void scan_root_and_subdirs(const char *root) {
     uv_dirent_t dent;
     while (uv_fs_scandir_next(&req, &dent) != UV_EOF) {
         if (is_hidden(dent.name)) continue;
-        char full_path[1024];
+        char full_path[PATH_MAX];
         snprintf(full_path, sizeof(full_path), "%s/%s", root, dent.name);
         if (dent.type == UV_DIRENT_DIR && is_directory(full_path)) {
             add_watcher(full_path);

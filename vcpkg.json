@@ -1,25 +1,26 @@
 {
   "name" : "avif-convert",
   "version-string" : "1.0.0",
-  "builtin-baseline" : "8f63c9ed5897d7367a92a442a79f91721e0fd38f",
+  "builtin-baseline" : "256acc64012b23a13041d8705805e1f23b43a024",
   "dependencies" : [ {
     "name" : "libavif",
-    "version>=" : "1.3.0",
+    "version>=" : "1.4.1",
     "features" : [ "aom" ]
   }, {
     "name" : "libheif",
-    "version>=" : "1.19.8#1"
+    "version>=" : "1.21.2",
+    "default-features" : false
   }, {
     "name" : "libjpeg-turbo",
-    "version>=" : "3.1.0#1"
+    "version>=" : "3.1.4.1"
   }, {
     "name" : "libwebp",
-    "version>=" : "1.5.0#1"
+    "version>=" : "1.6.0#2"
   }, {
     "name" : "libspng",
     "version>=" : "0.7.4"
   }, {
     "name" : "libuv",
-    "version>=" : "1.51.0"
+    "version>=" : "1.52.1"
   } ]
 }

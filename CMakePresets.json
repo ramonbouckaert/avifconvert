@@ -5,21 +5,29 @@
     {
       "name": "Debug",
       "hidden": false,
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_TOOLCHAIN_FILE": "vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_OVERLAY_TRIPLETS": "vcpkg-triplets"
+        "VCPKG_OVERLAY_TRIPLETS": "vcpkg-triplets",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_MAKE_PROGRAM": "/usr/bin/ninja"
       }
     },
     {
       "name": "Release",
       "hidden": false,
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_OVERLAY_TRIPLETS": "vcpkg-triplets"
+        "VCPKG_OVERLAY_TRIPLETS": "vcpkg-triplets",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_MAKE_PROGRAM": "/usr/bin/ninja"
       }
     }
   ],

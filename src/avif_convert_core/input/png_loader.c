@@ -89,7 +89,27 @@ int load_png(const uint8_t *data, const size_t size, LoadedImage *out_image) {
         true // PNG is lossless
     );
 
-    // Handle metadata
+    // Handle metadata — eXIf chunk (PNG spec 1.6.0+)
+    static const uint8_t tiff_le[] = {0x49, 0x49, 0x2A, 0x00};
+    static const uint8_t tiff_be[] = {0x4D, 0x4D, 0x00, 0x2A};
+    struct spng_exif exif_chunk = {0};
+    if (spng_get_exif(ctx, &exif_chunk) == 0 && exif_chunk.length > 0) {
+        const unsigned char *src = (const unsigned char *)exif_chunk.data;
+        for (size_t j = 0; j + 4 <= exif_chunk.length; j++) {
+            if (memcmp(src + j, tiff_le, 4) == 0 || memcmp(src + j, tiff_be, 4) == 0) {
+                const size_t exif_size = exif_chunk.length - j;
+                unsigned char *exif_copy = malloc(exif_size);
+                if (exif_copy) {
+                    memcpy(exif_copy, src + j, exif_size);
+                    out_image->exif_data = exif_copy;
+                    out_image->exif_size = exif_size;
+                }
+                break;
+            }
+        }
+    }
+
+    // Text chunks — XMP (iTXt) and legacy hex-encoded EXIF (tEXt)
     uint32_t n_text = 0;
     const int spng_get_text_err = spng_get_text(ctx, NULL, &n_text);
     if (spng_get_text_err != 0 && spng_get_text_err != SPNG_ECHUNKAVAIL) {
@@ -100,7 +120,7 @@ int load_png(const uint8_t *data, const size_t size, LoadedImage *out_image) {
 
     struct spng_text *text_chunks = malloc(n_text * sizeof(struct spng_text));
     if (text_chunks == NULL) {
-        printf("Out of memory for text chunks.\n");
+        fprintf(stderr, "Out of memory for text chunks.\n");
         return 1;
     }
 
@@ -118,11 +138,24 @@ int load_png(const uint8_t *data, const size_t size, LoadedImage *out_image) {
             out_image->xmp_data = xmp;
             out_image->xmp_size = t->length;
         } else if (strcasecmp(t->keyword, EXIF_KEYWORD) == 0 && out_image->exif_data == NULL) {
-            unsigned char *exif = NULL;
-            size_t exif_len = 0;
-            decode_exif_from_hex_string_png(t->text, &t->length, &exif, &exif_len);
-            out_image->exif_data = exif;
-            out_image->exif_size = exif_len;
+            unsigned char *decoded = NULL;
+            size_t decoded_len = 0;
+            decode_exif_from_hex_string_png(t->text, &t->length, &decoded, &decoded_len);
+            if (decoded) {
+                for (size_t j = 0; j + 4 <= decoded_len; j++) {
+                    if (memcmp(decoded + j, tiff_le, 4) == 0 || memcmp(decoded + j, tiff_be, 4) == 0) {
+                        const size_t exif_size = decoded_len - j;
+                        unsigned char *exif = malloc(exif_size);
+                        if (exif) {
+                            memcpy(exif, decoded + j, exif_size);
+                            out_image->exif_data = exif;
+                            out_image->exif_size = exif_size;
+                        }
+                        break;
+                    }
+                }
+                free(decoded);
+            }
         }
     }
     free(text_chunks);

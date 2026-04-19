@@ -81,7 +81,11 @@ AVIF_CONVERT_IO_API int write_file(const char *path, uint8_t const *data, const 
         fprintf(stderr, "Failed to open output file: %s\n", strerror(err));
         return 1;
     }
-    fwrite(data, 1, size, f);
+    if (fwrite(data, 1, size, f) != size) {
+        fprintf(stderr, "Failed to write output file: %s\n", path);
+        fclose(f);
+        return 1;
+    }
     fclose(f);
     printf("Wrote %s (%zu bytes)\n", path, size);
     return 0;

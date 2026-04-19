@@ -23,7 +23,6 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     const struct heif_error err2 = heif_context_get_primary_image_handle(ctx, &handle);
     if (err2.code != heif_error_Ok) {
         fprintf(stderr, "Failed to get image handle\n");
-        heif_image_handle_release(handle);
         heif_context_free(ctx);
         return -1;
     }
@@ -36,7 +35,6 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     heif_decoding_options_free(options);
     if (err3.code != heif_error_Ok) {
         fprintf(stderr, "Failed to decode HEIF image\n");
-        heif_image_release(img);
         heif_image_handle_release(handle);
         heif_context_free(ctx);
         return -1;
@@ -69,16 +67,36 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
             heif_context_free(ctx);
             return -1;
         }
-        heif_image_handle_get_list_of_metadata_block_IDs(handle, NULL, ids, 99);
+        heif_image_handle_get_list_of_metadata_block_IDs(handle, NULL, ids, metadata_count);
         for (int i = 0; i < metadata_count; i++) {
             const char *type = heif_image_handle_get_metadata_type(handle, ids[i]);
             const char *content_type = heif_image_handle_get_metadata_content_type(handle, ids[i]);
             if (strcmp(type, "Exif") == 0) {
-                const size_t exif_size = heif_image_handle_get_metadata_size(handle, ids[i]);
-                unsigned char *exif = malloc(exif_size);
-                heif_image_handle_get_metadata(handle, ids[i], exif);
-                out_image->exif_data = exif;
-                out_image->exif_size = exif_size;
+                const size_t raw_size = heif_image_handle_get_metadata_size(handle, ids[i]);
+                unsigned char *raw = malloc(raw_size);
+                if (!raw) continue;
+                heif_image_handle_get_metadata(handle, ids[i], raw);
+                // Scan for the TIFF header magic — use everything from that point regardless
+                // of whatever prefix bytes precede it.
+                static const uint8_t tiff_le[] = {0x49, 0x49, 0x2A, 0x00};
+                static const uint8_t tiff_be[] = {0x4D, 0x4D, 0x00, 0x2A};
+                size_t offset = raw_size; // sentinel: not found
+                for (size_t j = 0; j + 4 <= raw_size; j++) {
+                    if (memcmp(raw + j, tiff_le, 4) == 0 || memcmp(raw + j, tiff_be, 4) == 0) {
+                        offset = j;
+                        break;
+                    }
+                }
+                if (offset < raw_size) {
+                    const size_t exif_size = raw_size - offset;
+                    unsigned char *exif = malloc(exif_size);
+                    if (exif) {
+                        memcpy(exif, raw + offset, exif_size);
+                        out_image->exif_data = exif;
+                        out_image->exif_size = exif_size;
+                    }
+                }
+                free(raw);
             } else if (strcmp(content_type, "application/rdf+xml") == 0) {
                 const size_t xmp_size = heif_image_handle_get_metadata_size(handle, ids[i]);
                 unsigned char *xmp = malloc(xmp_size);

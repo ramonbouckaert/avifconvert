@@ -16,6 +16,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_io_bouckaert_avif_convert_convertToAvif(
     // Get input data and length
     jsize input_size = (*env)->GetArrayLength(env, input);
     jbyte* input_bytes = (*env)->GetByteArrayElements(env, input, NULL);
+    if (!input_bytes) return NULL;
 
     // Prepare output pointers
     uint8_t* output_data = NULL;
