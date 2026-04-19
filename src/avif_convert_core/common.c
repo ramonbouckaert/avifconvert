@@ -45,21 +45,28 @@ LoadedImage construct_image(
     const bool lossless
 ) {
     LoadedImage img = {0};
-
-    img.pixels = pixels;
     img.width = width;
     img.height = height;
     img.stride = stride;
     img.lossless = lossless;
+
+    img.frames = malloc(sizeof(LoadedFrame));
+    if (img.frames) {
+        img.frames[0].pixels = pixels;
+        img.frames[0].duration_ms = 0;
+        img.frame_count = 1;
+    }
 
     return img;
 }
 
 void free_loaded_image(LoadedImage *img) {
     if (!img) return;
-    if (img->pixels != NULL) free(img->pixels);
-    if (img->xmp_data != NULL) free(img->xmp_data);
-    if (img->exif_data != NULL) free(img->exif_data);
+    for (unsigned int i = 0; i < img->frame_count; i++)
+        free(img->frames[i].pixels);
+    free(img->frames);
+    free(img->xmp_data);
+    free(img->exif_data);
 }
 
 size_t remove_control_chars(char *data, const size_t len) {

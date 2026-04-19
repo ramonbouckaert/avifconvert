@@ -14,7 +14,7 @@ static void test_load_png_succeeds(void) {
     ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.png", &data, &size), 0);
     LoadedImage img = {0};
     ASSERT_EQ(load_png(data, size, &img), 0);
-    ASSERT_NOT_NULL(img.pixels);
+    ASSERT_NOT_NULL(img.frames[0].pixels);
     ASSERT_TRUE(img.width > 0);
     ASSERT_TRUE(img.height > 0);
     ASSERT_TRUE(img.lossless);
@@ -39,7 +39,7 @@ static void test_load_jpg_succeeds(void) {
     ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.jpg", &data, &size), 0);
     LoadedImage img = {0};
     ASSERT_EQ(load_jpg(data, size, &img), 0);
-    ASSERT_NOT_NULL(img.pixels);
+    ASSERT_NOT_NULL(img.frames[0].pixels);
     ASSERT_TRUE(img.width > 0);
     ASSERT_TRUE(img.height > 0);
     ASSERT_FALSE(img.lossless); // JPEG is always lossy
@@ -64,7 +64,7 @@ static void test_load_webp_succeeds(void) {
     ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.webp", &data, &size), 0);
     LoadedImage img = {0};
     ASSERT_EQ(load_webp(data, size, &img), 0);
-    ASSERT_NOT_NULL(img.pixels);
+    ASSERT_NOT_NULL(img.frames[0].pixels);
     ASSERT_TRUE(img.width > 0);
     ASSERT_TRUE(img.height > 0);
     ASSERT_FALSE(img.lossless); // burger.webp is VP8 (lossy)
@@ -96,7 +96,7 @@ static void test_load_gif_succeeds(void) {
     ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.gif", &data, &size), 0);
     LoadedImage img = {0};
     ASSERT_EQ(load_gif(data, size, &img), 0);
-    ASSERT_NOT_NULL(img.pixels);
+    ASSERT_NOT_NULL(img.frames[0].pixels);
     ASSERT_TRUE(img.width > 0);
     ASSERT_TRUE(img.height > 0);
     ASSERT_FALSE(img.lossless); // GIF is palette-limited
@@ -111,6 +111,20 @@ static void test_load_gif_extracts_xmp(void) {
     ASSERT_EQ(load_gif(data, size, &img), 0);
     ASSERT_NOT_NULL(img.xmp_data);
     ASSERT_TRUE(img.xmp_size > 0);
+    free_loaded_image(&img);
+    free(data);
+}
+
+static void test_load_animated_gif_frame_count(void) {
+    uint8_t *data = NULL; size_t size = 0;
+    ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger_anim.gif", &data, &size), 0);
+    LoadedImage img = {0};
+    ASSERT_EQ(load_gif(data, size, &img), 0);
+    ASSERT_EQ(img.frame_count, 2u);
+    ASSERT_NOT_NULL(img.frames[0].pixels);
+    ASSERT_NOT_NULL(img.frames[1].pixels);
+    ASSERT_TRUE(img.frames[0].duration_ms > 0);
+    ASSERT_TRUE(img.frames[1].duration_ms > 0);
     free_loaded_image(&img);
     free(data);
 }
@@ -134,7 +148,7 @@ static void test_load_heif_succeeds(void) {
     ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.heif", &data, &size), 0);
     LoadedImage img = {0};
     ASSERT_EQ(load_heif(data, size, &img), 0);
-    ASSERT_NOT_NULL(img.pixels);
+    ASSERT_NOT_NULL(img.frames[0].pixels);
     ASSERT_TRUE(img.width > 0);
     ASSERT_TRUE(img.height > 0);
     ASSERT_FALSE(img.lossless); // HEIC is treated as lossy
@@ -285,6 +299,7 @@ static void run_all(void) {
 
     test_load_gif_succeeds();
     test_load_gif_extracts_xmp();
+    test_load_animated_gif_frame_count();
     test_load_gif_dimensions_match_jpg();
 
     test_load_heif_succeeds();

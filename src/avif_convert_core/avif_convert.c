@@ -59,7 +59,7 @@ AVIF_CONVERT_API int convert_to_avif(
             return 1;
     }
 
-    if (!img.pixels) {
+    if (img.frame_count == 0 || !img.frames || !img.frames[0].pixels) {
         fprintf(stderr, "Failed to load image data\n");
         free_loaded_image(&img);
         return 1;

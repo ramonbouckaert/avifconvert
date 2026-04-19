@@ -116,6 +116,26 @@ static void test_convert_heif(void) {
     free(in); free(out);
 }
 
+static void test_convert_animated_gif(void) {
+    uint8_t *in = NULL; size_t in_size = 0;
+    ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger_anim.gif", &in, &in_size), 0);
+    uint8_t *out = NULL; size_t out_size = 0;
+    ASSERT_EQ(convert_to_avif(in, in_size, &out, &out_size, 10, 80), 0);
+    // Animated AVIF uses the 'avis' brand
+    ASSERT_TRUE(out_size >= 12);
+    ASSERT_MEM_EQ(out + 4, "ftyp", 4);
+    ASSERT_TRUE(memcmp(out + 8, "avis", 4) == 0 || memcmp(out + 8, "avif", 4) == 0);
+
+    // Decode and verify multiple frames
+    avifDecoder *dec = avifDecoderCreate();
+    ASSERT_EQ(avifDecoderSetIOMemory(dec, out, out_size), AVIF_RESULT_OK);
+    ASSERT_EQ(avifDecoderParse(dec), AVIF_RESULT_OK);
+    ASSERT_TRUE(dec->imageCount >= 2);
+    avifDecoderDestroy(dec);
+
+    free(in); free(out);
+}
+
 static void test_convert_avif_passthrough(void) {
     uint8_t *in = NULL; size_t in_size = 0;
     ASSERT_EQ(read_file(TEST_IMAGES_DIR "/burger.avif", &in, &in_size), 0);
@@ -298,6 +318,7 @@ static void run_all(void) {
     test_convert_webp();
     test_convert_heif();
     test_convert_gif();
+    test_convert_animated_gif();
     test_convert_avif_passthrough();
     test_convert_unknown_format_fails();
     test_convert_quality_affects_output_size();

@@ -21,11 +21,18 @@ typedef enum {
 InputFormat detect_input_format(const uint8_t *buf, size_t len);
 
 typedef struct {
-    uint8_t *pixels;
+    uint8_t *pixels;       // RGBA, owned
+    unsigned int duration_ms;
+} LoadedFrame;
+
+typedef struct {
     unsigned int width;
     unsigned int height;
     unsigned int stride;
     bool lossless;
+
+    LoadedFrame *frames;
+    unsigned int frame_count;
 
     // Optional metadata
     unsigned char *exif_data;
