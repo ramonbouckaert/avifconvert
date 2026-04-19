@@ -47,6 +47,66 @@ static void composite_frame(uint8_t *canvas, const SavedImage *frame,
     }
 }
 
+// Some GIF writers store XMP without proper sub-block framing: raw XMP bytes are placed
+// directly after the "XMP DataXMP" application header, terminated by a 0x00 byte.
+// Giflib misparses this: it treats byte 0 of the XMP ('<' = 0x3C = 60) as a sub-block
+// size, reads the next 60 bytes as content, treats byte 61 as the next sub-block size,
+// etc. The "size" bytes (which happen to be printable ASCII from the XMP text) are
+// silently dropped, producing corrupted output.
+//
+// This function scans the raw GIF bytes for the XMP app extension and reads bytes
+// directly (bypassing sub-block framing), but only when the content looks like raw XML
+// (starts with "<?xpacket" or "<x:xmpmeta"). Properly-framed XMP with a magic trailer
+// has a non-'<' first byte (a sub-block size), so this function ignores it — that path
+// is handled by extract_xmp_from_blocks below.
+static void extract_xmp_direct(const uint8_t *gif_data, const size_t gif_size,
+                                unsigned char **xmp_out, size_t *size_out) {
+    // Full marker: Extension Introducer + App Label + Block Size + "XMP DataXMP"
+    static const uint8_t marker[] = {
+        0x21, 0xFF, 0x0B, 'X', 'M', 'P', ' ', 'D', 'a', 't', 'a', 'X', 'M', 'P'
+    };
+    const size_t marker_len = sizeof(marker);
+
+    for (size_t i = 0; i + marker_len < gif_size; i++) {
+        if (memcmp(gif_data + i, marker, marker_len) != 0) continue;
+
+        const uint8_t *p = gif_data + i + marker_len;
+        const uint8_t *end_ptr = gif_data + gif_size;
+
+        // Count raw bytes up to the block terminator (0x00)
+        const uint8_t *q = p;
+        while (q < end_ptr && *q != 0x00) q++;
+        const size_t raw_len = (size_t)(q - p);
+        if (raw_len < 9) return;
+
+        // Only handle raw (unframed) XMP: content must begin with "<?xpacket" or
+        // "<x:xmpmeta". Properly-framed XMP starts with a sub-block size byte.
+        const int is_raw_xml = (memcmp(p, "<?xpacket", 9) == 0) ||
+                               (raw_len >= 10 && memcmp(p, "<x:xmpmeta", 10) == 0);
+        if (!is_raw_xml) return;
+
+        unsigned char *buf = malloc(raw_len);
+        if (!buf) return;
+        memcpy(buf, p, raw_len);
+
+        const char *tags[] = { "</x:xmpmeta>", "</xmpmeta>" };
+        size_t xmp_len = raw_len;
+        for (int t = 0; t < 2; t++) {
+            const size_t tlen = strlen(tags[t]);
+            for (size_t k = raw_len; k >= tlen; k--) {
+                if (memcmp(buf + k - tlen, tags[t], tlen) == 0) { xmp_len = k; break; }
+            }
+            if (xmp_len != raw_len) break;
+        }
+        if (xmp_len == raw_len && raw_len > 258)
+            xmp_len = raw_len - 258;
+
+        *xmp_out = buf;
+        *size_out = xmp_len;
+        return;
+    }
+}
+
 // GIF stores XMP as an Application Extension: "XMP Data" + "XMP" (11-byte header),
 // followed by CONTINUE sub-blocks containing raw XMP XML plus a 258-byte magic trailer.
 // We concatenate all CONTINUE blocks and truncate at the closing XMP tag.
@@ -72,16 +132,24 @@ static void extract_xmp_from_blocks(const ExtensionBlock *blocks, int count,
             pos += (size_t)blocks[j].ByteCount;
         }
 
-        // Truncate at the end of the XMP document, stripping the magic trailer
-        const char *end_tag = "</x:xmpmeta>";
-        const size_t end_tag_len = strlen(end_tag);
+        // Truncate at the end of the XMP document, stripping the magic trailer.
+        // XMP root can be <x:xmpmeta> or <xmpmeta> depending on the writing tool.
+        // If neither closing tag is found, fall back to stripping the fixed 258-byte
+        // magic trailer (the approach used by ExifTool).
+        const char *tags[] = { "</x:xmpmeta>", "</xmpmeta>" };
         size_t xmp_len = total;
-        for (size_t k = total; k >= end_tag_len; k--) {
-            if (memcmp(buf + k - end_tag_len, end_tag, end_tag_len) == 0) {
-                xmp_len = k;
-                break;
+        for (int t = 0; t < 2; t++) {
+            const size_t tag_len = strlen(tags[t]);
+            for (size_t k = total; k >= tag_len; k--) {
+                if (memcmp(buf + k - tag_len, tags[t], tag_len) == 0) {
+                    xmp_len = k;
+                    break;
+                }
             }
+            if (xmp_len != total) break;
         }
+        if (xmp_len == total && total > 258)
+            xmp_len = total - 258;
 
         *xmp_data = buf;
         *xmp_size = xmp_len;
@@ -228,6 +296,16 @@ next_frame:
         extract_xmp_from_blocks(gif->ExtensionBlocks, gif->ExtensionBlockCount,
                                 &out_image->xmp_data, &out_image->xmp_size);
     }
+    // If giflib's sub-block de-framing corrupted the XMP (because the writer stored raw
+    // bytes without GIF sub-block framing), the result won't start with '<'. Discard it
+    // and re-extract directly from the raw GIF stream.
+    if (out_image->xmp_data && out_image->xmp_data[0] != '<') {
+        free(out_image->xmp_data);
+        out_image->xmp_data = NULL;
+        out_image->xmp_size = 0;
+    }
+    if (!out_image->xmp_data)
+        extract_xmp_direct(data, size, &out_image->xmp_data, &out_image->xmp_size);
 
     DGifCloseFile(gif, &error);
     return 0;

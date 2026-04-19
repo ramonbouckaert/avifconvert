@@ -16,7 +16,7 @@ static int is_chunk(const uint8_t *data, const char *tag) {
 
 int detect_webp_lossless(const uint8_t *data, const size_t size) {
     if (size < 16 || !is_chunk(data, "RIFF") || !is_chunk(data + 8, "WEBP")) {
-        return 1; // Not a valid WebP
+        return -1; // Not a valid WebP
     }
 
     const uint8_t *ptr = data + 12; // Skip RIFF header
