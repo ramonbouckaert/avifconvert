@@ -16,7 +16,7 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     if (err1.code != heif_error_Ok) {
         fprintf(stderr, "Failed to read HEIF file.\n");
         heif_context_free(ctx);
-        return -1;
+        return 1;
     }
 
     struct heif_image_handle *handle;
@@ -24,7 +24,7 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     if (err2.code != heif_error_Ok) {
         fprintf(stderr, "Failed to get image handle\n");
         heif_context_free(ctx);
-        return -1;
+        return 1;
     }
 
     struct heif_decoding_options *options = heif_decoding_options_alloc();
@@ -37,7 +37,7 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
         fprintf(stderr, "Failed to decode HEIF image\n");
         heif_image_handle_release(handle);
         heif_context_free(ctx);
-        return -1;
+        return 1;
     }
 
     const int width = heif_image_get_width(img, heif_channel_interleaved);
@@ -45,8 +45,14 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     int stride;
     const uint8_t *src = heif_image_get_plane_readonly(img, heif_channel_interleaved, &stride);
 
-    uint8_t *copy = malloc(height * stride);
-    memcpy(copy, src, height * stride);
+    uint8_t *copy = malloc((size_t)height * stride);
+    if (!copy) {
+        heif_image_release(img);
+        heif_image_handle_release(handle);
+        heif_context_free(ctx);
+        return 1;
+    }
+    memcpy(copy, src, (size_t)height * stride);
 
     *out_image = construct_image(
         copy,
@@ -65,7 +71,7 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
             heif_image_release(img);
             heif_image_handle_release(handle);
             heif_context_free(ctx);
-            return -1;
+            return 1;
         }
         heif_image_handle_get_list_of_metadata_block_IDs(handle, NULL, ids, metadata_count);
         for (int i = 0; i < metadata_count; i++) {
@@ -100,9 +106,11 @@ int load_heif(const uint8_t *data, const size_t size, LoadedImage *out_image) {
             } else if (strcmp(content_type, "application/rdf+xml") == 0) {
                 const size_t xmp_size = heif_image_handle_get_metadata_size(handle, ids[i]);
                 unsigned char *xmp = malloc(xmp_size);
-                heif_image_handle_get_metadata(handle, ids[i], xmp);
-                out_image->xmp_data = xmp;
-                out_image->xmp_size = xmp_size;
+                if (xmp) {
+                    heif_image_handle_get_metadata(handle, ids[i], xmp);
+                    out_image->xmp_data = xmp;
+                    out_image->xmp_size = xmp_size;
+                }
             }
         }
         free(ids);

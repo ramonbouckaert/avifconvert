@@ -16,7 +16,7 @@ static int is_chunk(const uint8_t *data, const char *tag) {
 
 int detect_webp_lossless(const uint8_t *data, const size_t size) {
     if (size < 16 || !is_chunk(data, "RIFF") || !is_chunk(data + 8, "WEBP")) {
-        return -1; // Not a valid WebP
+        return 1; // Not a valid WebP
     }
 
     const uint8_t *ptr = data + 12; // Skip RIFF header
@@ -46,16 +46,23 @@ int load_webp(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     // Detect whether it's a lossless or lossy webp
     const int lossless = detect_webp_lossless(data, size);
 
-    // Decode RGBA value from the image itself
-    uint8_t *output = WebPDecodeRGBA(data, size, &width, &height);
-    if (!output) {
+    // Get dimensions without decoding
+    if (!WebPGetInfo(data, size, &width, &height)) {
         fprintf(stderr, "WebP decode failed\n");
-        return -1;
+        return 1;
     }
 
-    unsigned char *rgba = malloc(width * height * 4);
-    memcpy(rgba, output, width * height * 4);
-    WebPFree(output);
+    unsigned char *rgba = malloc((size_t)width * height * 4);
+    if (!rgba) {
+        fprintf(stderr, "Out of memory for WebP image\n");
+        return 1;
+    }
+
+    if (!WebPDecodeRGBAInto(data, size, rgba, (size_t)width * height * 4, width * 4)) {
+        fprintf(stderr, "WebP decode failed\n");
+        free(rgba);
+        return 1;
+    }
 
     *out_image = construct_image(
         rgba,
@@ -70,7 +77,7 @@ int load_webp(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     WebPDemuxer *demux = WebPDemux(&webp_data);
     if (!demux) {
         fprintf(stderr, "WebP demux failed\n");
-        return -1;
+        return 1;
     }
     static const uint8_t tiff_le[] = {0x49, 0x49, 0x2A, 0x00};
     static const uint8_t tiff_be[] = {0x4D, 0x4D, 0x00, 0x2A};
@@ -94,9 +101,11 @@ int load_webp(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     }
     if (WebPDemuxGetChunk(demux, "XMP ", 1, &chunk_iter)) {
         unsigned char *xmp = malloc(chunk_iter.chunk.size);
-        memcpy(xmp, chunk_iter.chunk.bytes, chunk_iter.chunk.size);
-        out_image->xmp_data = xmp;
-        out_image->xmp_size = chunk_iter.chunk.size;
+        if (xmp) {
+            memcpy(xmp, chunk_iter.chunk.bytes, chunk_iter.chunk.size);
+            out_image->xmp_data = xmp;
+            out_image->xmp_size = chunk_iter.chunk.size;
+        }
         WebPDemuxReleaseChunkIterator(&chunk_iter);
     }
     WebPDemuxDelete(demux);

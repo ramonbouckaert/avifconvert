@@ -53,12 +53,14 @@ int load_png(const uint8_t *data, const size_t size, LoadedImage *out_image) {
 
     if (spng_set_png_buffer(ctx, data, size)) {
         fprintf(stderr, "Failed to set PNG buffer\n");
+        spng_ctx_free(ctx);
         return 1;
     }
 
     struct spng_ihdr ihdr;
     if (spng_get_ihdr(ctx, &ihdr)) {
         fprintf(stderr, "Failed to get PNG IHDR\n");
+        spng_ctx_free(ctx);
         return 1;
     }
 
@@ -66,18 +68,21 @@ int load_png(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     size_t image_size;
     if (spng_decoded_image_size(ctx, SPNG_FMT_RGBA8, &image_size)) {
         fprintf(stderr, "Failed to get decoded image size\n");
+        spng_ctx_free(ctx);
         return 1;
     }
 
     unsigned char *rgba = malloc(image_size);
     if (!rgba) {
         fprintf(stderr, "Out of memory for decoded image\n");
+        spng_ctx_free(ctx);
         return 1;
     }
 
     if (spng_decode_image(ctx, rgba, image_size, SPNG_FMT_RGBA8, 0)) {
         fprintf(stderr, "Failed to decode PNG image\n");
         free(rgba);
+        spng_ctx_free(ctx);
         return 1;
     }
 
@@ -114,6 +119,7 @@ int load_png(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     const int spng_get_text_err = spng_get_text(ctx, NULL, &n_text);
     if (spng_get_text_err != 0 && spng_get_text_err != SPNG_ECHUNKAVAIL) {
         fprintf(stderr, "Failed to get text chunk count\n");
+        spng_ctx_free(ctx);
         return 1;
     }
     if (n_text < 1) goto cleanup;
@@ -121,6 +127,7 @@ int load_png(const uint8_t *data, const size_t size, LoadedImage *out_image) {
     struct spng_text *text_chunks = malloc(n_text * sizeof(struct spng_text));
     if (text_chunks == NULL) {
         fprintf(stderr, "Out of memory for text chunks.\n");
+        spng_ctx_free(ctx);
         return 1;
     }
 

@@ -92,6 +92,7 @@ AVIF_CONVERT_API int is_convertible(
         case FORMAT_JPEG:
         case FORMAT_WEBP:
         case FORMAT_HEIF:
+        case FORMAT_GIF:
             return 1;
         case FORMAT_AVIF:
         default:
